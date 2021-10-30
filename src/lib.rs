@@ -197,12 +197,9 @@ fn set_revalidation_headers(mut _req: &Request) {
 
 fn get_warning_code(res: &Response) -> Option<usize> {
     res.header("Warning").and_then(|hdr| {
-        hdr.as_str()
-            .chars()
-            .take(3)
-            .collect::<String>()
-            .parse()
-            .ok()
+        hdr.as_str().split_whitespace().nth(1).and_then(|code| {
+            code.parse().ok()
+        })
     })
 }
 
@@ -255,5 +252,21 @@ impl<T: CacheManager + 'static + Send + Sync> Middleware for Cache<T> {
     ) -> Result<Response, http_types::Error> {
         let res = next.run(req, client).await?;
         Ok(res)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use http_types::{Response, StatusCode};
+    use surf::Result;
+
+    #[async_std::test]
+    async fn can_get_warning_code() -> Result<()> {
+        let url = surf::http::Url::from_str("https://example.com")?;
+        let mut res = Response::new(StatusCode::Ok);
+        res.append_header("Warning", build_warning(&url, 111, "Revalidation failed"));
+        let code = get_warning_code(&res.into()).unwrap();
+        Ok(assert_eq!(code, 111))
     }
 }
