@@ -269,4 +269,12 @@ mod tests {
         let code = get_warning_code(&res.into()).unwrap();
         Ok(assert_eq!(code, 111))
     }
+
+    #[async_std::test]
+    async fn can_check_revalidate() -> Result<()> {
+        let mut res = Response::new(StatusCode::Ok);
+        res.append_header("Cache-Control", "max-age=1733992, must-revalidate");
+        let check = must_revalidate(&res.into());
+        Ok(assert_eq!(check, true))
+    }
 }
