@@ -197,9 +197,10 @@ fn set_revalidation_headers(mut _req: &Request) {
 
 fn get_warning_code(res: &Response) -> Option<usize> {
     res.header("Warning").and_then(|hdr| {
-        hdr.as_str().split_whitespace().nth(1).and_then(|code| {
-            code.parse().ok()
-        })
+        hdr.as_str()
+            .split_whitespace()
+            .nth(1)
+            .and_then(|code| code.parse().ok())
     })
 }
 
@@ -271,10 +272,10 @@ mod tests {
     }
 
     #[async_std::test]
-    async fn can_check_revalidate() -> Result<()> {
+    async fn can_check_revalidate() {
         let mut res = Response::new(StatusCode::Ok);
         res.append_header("Cache-Control", "max-age=1733992, must-revalidate");
         let check = must_revalidate(&res.into());
-        Ok(assert_eq!(check, true))
+        assert_eq!(check, true)
     }
 }
