@@ -84,7 +84,8 @@ impl<T: CacheManager> Cache<T> {
             }
         } else if self.mode == CacheMode::OnlyIfCached {
             // ENOTCACHED
-            unimplemented!()
+            let err_res = http_types::Response::new(http_types::StatusCode::GatewayTimeout);
+            Ok(err_res.into())
         } else {
             Ok(self.remote_fetch(req, client, next).await?)
         }
