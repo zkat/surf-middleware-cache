@@ -11,8 +11,16 @@ pub mod managers;
 
 #[surf::utils::async_trait]
 pub trait CacheManager {
-    async fn get(&self, req: &Request) -> Result<Option<Response>, http_types::Error>;
-    async fn put(&self, req: &Request, res: &mut Response) -> Result<Response, http_types::Error>;
+    async fn get(
+        &self,
+        req: &Request,
+    ) -> Result<Option<(Response, CachePolicy)>, http_types::Error>;
+    async fn put(
+        &self,
+        req: &Request,
+        res: &mut Response,
+        policy: CachePolicy,
+    ) -> Result<Response, http_types::Error>;
     async fn delete(&self, req: &Request) -> Result<(), http_types::Error>;
 }
 
@@ -48,7 +56,8 @@ impl<T: CacheManager> Cache<T> {
             return self.remote_fetch(req, client, next).await;
         }
 
-        if let Some(mut res) = self.cache_manager.get(&req).await? {
+        if let Some(store) = self.cache_manager.get(&req).await? {
+            let (mut res, mut policy) = store;
             if let Some(warning_code) = get_warning_code(&res) {
                 // https://tools.ietf.org/html/rfc7234#section-4.3.4
                 //
@@ -68,7 +77,9 @@ impl<T: CacheManager> Cache<T> {
             if self.mode == CacheMode::Default && !is_stale(&req, &res) {
                 Ok(res)
             } else if self.mode == CacheMode::Default {
-                Ok(self.conditional_fetch(req, res, client, next).await?)
+                Ok(self
+                    .conditional_fetch(req, res, policy, client, next)
+                    .await?)
             } else if self.mode == CacheMode::ForceCache || self.mode == CacheMode::OnlyIfCached {
                 //   112 Disconnected operation
                 // SHOULD be included if the cache is intentionally disconnected from
@@ -95,6 +106,7 @@ impl<T: CacheManager> Cache<T> {
         &self,
         mut req: Request,
         mut cached_res: Response,
+        mut policy: CachePolicy,
         client: Client,
         next: Next<'_>,
     ) -> Result<Response, http_types::Error> {
@@ -121,7 +133,10 @@ impl<T: CacheManager> Cache<T> {
                     // TODO - set headers to revalidated response headers? Needs http-cache-semantics.
                     res.set_body(cached_res.body_string().await?);
                     let mut converted = Response::from(res);
-                    let res = self.cache_manager.put(&copied_req, &mut converted).await?;
+                    let res = self
+                        .cache_manager
+                        .put(&copied_req, &mut converted, policy)
+                        .await?;
                     Ok(res)
                 } else {
                     Ok(cached_res)
@@ -176,7 +191,12 @@ impl<T: CacheManager> Cache<T> {
             && res.status() == http_types::StatusCode::Ok
             && is_storable(&copied_req, &res);
         if is_cacheable {
-            Ok(self.cache_manager.put(&copied_req, &mut res).await?)
+            let policy =
+                CachePolicy::new(&get_request_parts(&copied_req), &get_response_parts(&res));
+            Ok(self
+                .cache_manager
+                .put(&copied_req, &mut res, policy)
+                .await?)
         } else if !is_method_get_head {
             self.cache_manager.delete(&copied_req).await?;
             Ok(res)
@@ -219,7 +239,7 @@ fn is_storable(req: &Request, res: &Response) -> bool {
 }
 
 // Convert the surf::Response for CachePolicy to use
-fn get_response_parts(res: &Response) -> http::response::Parts {
+pub fn get_response_parts(res: &Response) -> http::response::Parts {
     let mut headers = http::HeaderMap::new();
     for header in res.iter() {
         headers.insert(
@@ -237,7 +257,7 @@ fn get_response_parts(res: &Response) -> http::response::Parts {
 }
 
 // Convert the surf::Request for CachePolicy to use
-fn get_request_parts(res: &Request) -> http::request::Parts {
+pub fn get_request_parts(res: &Request) -> http::request::Parts {
     let mut headers = http::HeaderMap::new();
     for header in res.iter() {
         headers.insert(
