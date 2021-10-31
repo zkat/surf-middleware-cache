@@ -7,10 +7,17 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+cacache = { version = "9.0.0", optional = true }
 surf = "2.3.1"
 serde_json = "1.0.68"
+http = "0.2.5"
+http-cache-semantics = "0.9.9"
 httpdate = "1.0.1"
 http-types = "2.5.0"
 
 [dev-dependencies]
 async-std = { version = "1.10", features = ["attributes"]}
+
+[features]
+default = ["manager-cacache"]
+manager-cacache = ["cacache"]

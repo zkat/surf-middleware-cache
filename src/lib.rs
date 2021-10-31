@@ -1,10 +1,13 @@
 use std::{str::FromStr, time::SystemTime};
 
+use http_cache_semantics::CachePolicy;
 use http_types::{headers::HeaderValue, Method};
 use surf::{
     middleware::{Middleware, Next},
     Client, Request, Response,
 };
+
+pub mod managers;
 
 #[surf::utils::async_trait]
 pub trait CacheManager {
@@ -204,9 +207,45 @@ fn get_warning_code(res: &Response) -> Option<usize> {
     })
 }
 
-fn is_stale(_req: &Request, _res: &Response) -> bool {
-    // TODO - most of what this looks like is gonna depend on http-cache-semantics
-    unimplemented!()
+fn is_stale(req: &Request, res: &Response) -> bool {
+    CachePolicy::new(&get_request_parts(req), &get_response_parts(res)).is_stale(SystemTime::now())
+}
+
+// Convert the surf::Response for CachePolicy to use
+fn get_response_parts(res: &Response) -> http::response::Parts {
+    let mut headers = http::HeaderMap::new();
+    for header in res.iter() {
+        headers.insert(
+            http::header::HeaderName::from_str(header.0.as_str()).expect("Invalid header name"),
+            http::HeaderValue::from_str(header.1.as_str()).expect("Invalid header value"),
+        );
+    }
+    let status =
+        http::StatusCode::from_str(res.status().to_string().as_ref()).expect("Invalid status code");
+    let mut converted = http::response::Response::new(());
+    converted.headers_mut().clone_from(&headers);
+    converted.status_mut().clone_from(&status);
+    let parts = converted.into_parts();
+    parts.0
+}
+
+// Convert the surf::Request for CachePolicy to use
+fn get_request_parts(res: &Request) -> http::request::Parts {
+    let mut headers = http::HeaderMap::new();
+    for header in res.iter() {
+        headers.insert(
+            http::header::HeaderName::from_str(header.0.as_str()).expect("Invalid header name"),
+            http::HeaderValue::from_str(header.1.as_str()).expect("Invalid header value"),
+        );
+    }
+    let uri = http::Uri::from_str(res.url().as_str()).expect("Invalid request uri");
+    let method = http::Method::from_str(res.method().as_ref()).expect("Invalid request method");
+    let mut converted = http::request::Request::new(());
+    converted.headers_mut().clone_from(&headers);
+    converted.uri_mut().clone_from(&uri);
+    converted.method_mut().clone_from(&method);
+    let parts = converted.into_parts();
+    parts.0
 }
 
 fn build_warning(uri: &surf::http::Url, code: usize, message: &str) -> HeaderValue {
