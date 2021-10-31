@@ -53,9 +53,7 @@ fn req_key(req: &Request) -> String {
 impl CacheManager for CACacheManager {
     async fn get(&self, req: &Request) -> Result<Option<Response>> {
         let store: ResponseStore = match cacache::read(&self.path, &req_key(req)).await {
-            Ok(d) => {
-                bincode::deserialize(&d)?
-            },
+            Ok(d) => bincode::deserialize(&d)?,
             Err(_e) => {
                 return Ok(None);
             }
@@ -79,5 +77,34 @@ impl CacheManager for CACacheManager {
 
     async fn delete(&self, req: &Request) -> Result<()> {
         Ok(cacache::remove(&self.path, &req_key(req)).await?)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use http_types::{Method, Response, StatusCode};
+    use std::str::FromStr;
+    use surf::{Request, Result};
+
+    #[async_std::test]
+    async fn can_cache_response() -> Result<()> {
+        let url = surf::http::Url::from_str("https://example.com")?;
+        let mut res = Response::new(StatusCode::Ok);
+        res.set_body("test");
+        let mut res = surf::Response::from(res);
+        let req = Request::new(Method::Get, url);
+        let manager = CACacheManager::default();
+        manager.put(&req, &mut res).await?;
+        let data = manager.get(&req).await?;
+        let body = match data {
+            Some(mut d) => d.body_string().await?,
+            None => String::new(),
+        };
+        assert_eq!(&body, "test");
+        manager.delete(&req).await?;
+        let data = manager.get(&req).await?;
+        assert!(data.is_none());
+        Ok(())
     }
 }
