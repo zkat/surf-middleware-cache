@@ -99,7 +99,7 @@ impl<T: CacheManager> Cache<T> {
         next: Next<'_>,
     ) -> Result<Response, http_types::Error> {
         set_revalidation_headers(&mut req);
-        let copied_req = clone_req(&req);
+        let copied_req = req.clone();
         match self.remote_fetch(req, client, next).await {
             Ok(cond_res) => {
                 if cond_res.status().is_server_error() && must_revalidate(&cached_res) {
@@ -167,7 +167,7 @@ impl<T: CacheManager> Cache<T> {
         client: Client,
         next: Next<'_>,
     ) -> Result<Response, http_types::Error> {
-        let copied_req = clone_req(&req);
+        let copied_req = req.clone();
         let mut res = next.run(req, client).await?;
         let is_method_get_head =
             copied_req.method() == Method::Get || copied_req.method() == Method::Head;
@@ -277,16 +277,6 @@ fn build_warning(uri: &surf::http::Url, code: usize, message: &str) -> HeaderVal
         .as_str(),
     )
     .expect("Failed to generate warning string")
-}
-
-fn clone_req(req: &Request) -> Request {
-    let mut copied_req = http_types::Request::new(req.method(), req.url().clone());
-    for (key, value) in req.iter() {
-        copied_req.insert_header(key, value.clone().as_str());
-    }
-    // TODO - Didn't see where to pull version from surf::Request
-    // copied_req.set_version(req.version().clone());
-    copied_req.into()
 }
 
 #[surf::utils::async_trait]
