@@ -49,6 +49,14 @@ fn req_key(req: &Request) -> String {
     format!("{}:{}", req.method(), req.url())
 }
 
+#[allow(dead_code)]
+impl CACacheManager {
+    async fn clear(&self) -> Result<()> {
+        cacache::clear(&self.path).await?;
+        Ok(())
+    }
+}
+
 #[surf::utils::async_trait]
 impl CacheManager for CACacheManager {
     async fn get(&self, req: &Request) -> Result<Option<Response>> {
@@ -105,6 +113,7 @@ mod tests {
         manager.delete(&req).await?;
         let data = manager.get(&req).await?;
         assert!(data.is_none());
+        manager.clear().await?;
         Ok(())
     }
 }
