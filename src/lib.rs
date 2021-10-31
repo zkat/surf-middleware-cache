@@ -202,9 +202,11 @@ fn set_revalidation_headers(mut _req: &Request) {
 fn get_warning_code(res: &Response) -> Option<usize> {
     res.header("Warning").and_then(|hdr| {
         hdr.as_str()
-            .split_whitespace()
-            .nth(1)
-            .and_then(|code| code.parse().ok())
+            .chars()
+            .take(3)
+            .collect::<String>()
+            .parse()
+            .ok()
     })
 }
 
@@ -263,8 +265,8 @@ fn build_warning(uri: &surf::http::Url, code: usize, message: &str) -> HeaderVal
     HeaderValue::from_str(
         format!(
             "{} {} {:?} \"{}\"",
-            uri.host().expect("Invalid URL"),
             code,
+            uri.host().expect("Invalid URL"),
             message,
             httpdate::fmt_http_date(SystemTime::now())
         )
