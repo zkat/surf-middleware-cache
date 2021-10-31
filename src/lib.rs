@@ -60,7 +60,7 @@ impl<T: CacheManager> Cache<T> {
                 // * retain any Warning header fields in the stored response with
                 //   warn-code 2xx;
                 //
-                if (100..200).contains(&warning_code) {
+                if warning_code >= 100 && warning_code < 200 {
                     res.remove_header("Warning");
                 }
             }
