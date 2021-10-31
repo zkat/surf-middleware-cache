@@ -52,14 +52,10 @@ fn req_key(req: &Request) -> String {
 #[surf::utils::async_trait]
 impl CacheManager for CACacheManager {
     async fn get(&self, req: &Request) -> Result<Option<Response>> {
-        let data = match cacache::read(&self.path, &req_key(req)).await {
-            Ok(d) => d,
-            Err(_e) => {
-                return Ok(None);
-            }
-        };
-        let store: ResponseStore = match bincode::deserialize(&data) {
-            Ok(s) => s,
+        let store: ResponseStore = match cacache::read(&self.path, &req_key(req)).await {
+            Ok(d) => {
+                bincode::deserialize(&d)?
+            },
             Err(_e) => {
                 return Ok(None);
             }
