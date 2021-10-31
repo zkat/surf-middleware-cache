@@ -173,8 +173,7 @@ impl<T: CacheManager> Cache<T> {
         let is_cacheable = self.mode != CacheMode::NoStore
             && is_method_get_head
             && res.status() == http_types::StatusCode::Ok
-            && CachePolicy::new(&get_request_parts(&copied_req), &get_response_parts(&res))
-                .is_storable();
+            && is_storable(&copied_req, &res);
         if is_cacheable {
             Ok(self.cache_manager.put(&copied_req, &mut res).await?)
         } else if !is_method_get_head {
@@ -212,6 +211,10 @@ fn get_warning_code(res: &Response) -> Option<usize> {
 
 fn is_stale(req: &Request, res: &Response) -> bool {
     CachePolicy::new(&get_request_parts(req), &get_response_parts(res)).is_stale(SystemTime::now())
+}
+
+fn is_storable(req: &Request, res: &Response) -> bool {
+    CachePolicy::new(&get_request_parts(req), &get_response_parts(res)).is_storable()
 }
 
 // Convert the surf::Response for CachePolicy to use
