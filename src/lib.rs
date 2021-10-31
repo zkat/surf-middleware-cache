@@ -12,7 +12,7 @@ pub mod managers;
 #[surf::utils::async_trait]
 pub trait CacheManager {
     async fn get(&self, req: &Request) -> Result<Option<Response>, http_types::Error>;
-    async fn put(&self, req: &Request, res: Response) -> Result<Response, http_types::Error>;
+    async fn put(&self, req: &Request, res: &mut Response) -> Result<Response, http_types::Error>;
     async fn delete(&self, req: &Request) -> Result<(), http_types::Error>;
 }
 
@@ -119,7 +119,8 @@ impl<T: CacheManager> Cache<T> {
                     }
                     // TODO - set headers to revalidated response headers? Needs http-cache-semantics.
                     res.set_body(cached_res.body_string().await?);
-                    let res = self.cache_manager.put(&copied_req, res.into()).await?;
+                    let mut converted = Response::from(res);
+                    let res = self.cache_manager.put(&copied_req, &mut converted).await?;
                     Ok(res)
                 } else {
                     Ok(cached_res)
@@ -166,7 +167,7 @@ impl<T: CacheManager> Cache<T> {
         next: Next<'_>,
     ) -> Result<Response, http_types::Error> {
         let copied_req = clone_req(&req);
-        let res = next.run(req, client).await?;
+        let mut res = next.run(req, client).await?;
         let is_method_get_head =
             copied_req.method() == Method::Get || copied_req.method() == Method::Head;
         let is_cacheable = self.mode != CacheMode::NoStore
@@ -175,7 +176,7 @@ impl<T: CacheManager> Cache<T> {
         // TODO
         // && policy.is_storable(&req_copy, &res);
         if is_cacheable {
-            Ok(self.cache_manager.put(&copied_req, res).await?)
+            Ok(self.cache_manager.put(&copied_req, &mut res).await?)
         } else if !is_method_get_head {
             self.cache_manager.delete(&copied_req).await?;
             Ok(res)
