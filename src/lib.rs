@@ -172,9 +172,9 @@ impl<T: CacheManager> Cache<T> {
             copied_req.method() == Method::Get || copied_req.method() == Method::Head;
         let is_cacheable = self.mode != CacheMode::NoStore
             && is_method_get_head
-            && res.status() == http_types::StatusCode::Ok;
-        // TODO
-        // && policy.is_storable(&req_copy, &res);
+            && res.status() == http_types::StatusCode::Ok
+            && CachePolicy::new(&get_request_parts(&copied_req), &get_response_parts(&res))
+                .is_storable();
         if is_cacheable {
             Ok(self.cache_manager.put(&copied_req, &mut res).await?)
         } else if !is_method_get_head {
